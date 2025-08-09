@@ -1,0 +1,875 @@
+---
+title: "STA5228 Reliability and Life Data Project"
+subtitle: Reliability Assessment of Dishwashers. A Multimodal Failure Analysis
+author: "Jezerca Hodaj"
+date: "`r Sys.Date()`"
+output: pdf_document
+geometry: "margin = 1in"
+includes:
+after_body: appendix.md
+bibliography: references.bib
+link-citations: true 
+number_sections: TRUE
+header-includes: 
+- \usepackage{etoolbox}
+- \usepackage{amsmath,amssymb}
+- \newtheorem{definition}{Definition}
+- \newtheorem{theorem}{Theorem}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(SMRD)
+library(MASS)
+library(survival)
+library(survminer)
+library(ComparisonSurv)
+library(muhaz)
+library(rms)
+library(VGAM)
+library(cmprsk)
+```
+
+# 1. Introduction
+
+In this course we learned how to do parametric and non-parametric reliability analysis on products or systems while taking in consideration only one failure mode. However, many products systems, components etc, may have more than one failure mode, where each failure mode is like a component in a series system. When one of the components fail the system fails.
+This project's concern is the reliability of dishwashers. Dishwashers are essential household appliances, and their reliability is paramount for user satisfaction.  By investigating and modeling various failure scenarios, we seek to enhance our understanding of dishwasher performance and provide insights for potential improvements. The data set that we chose for the project contains two failure modes for the dishwashers. One failure mode is failure of the spray arm due to breakage and failure of the spray arm due to obstruction. 
+
+We are going to do a parametric and non-parametric analysis on the reliability of the dishwashers of our data set. First perform a parametric analysis taking into consideration each failure mode separately while considering the other failure mode times as right censured times. Next, we do a non-parametric analysis, giving Kaplan-Meier estimates of the survival probabilities for both cases aforementioned. Lastly we estimate the reliability taking in consideration both failure modes. 
+
+
+# 2. Parametric Analysis of the Dishwasher data 
+
+When failure times for the different failure modes are independent and the cause of failure is given for all units that have failed, we can analyze the individual failure modes separately. For this, the failures for failure mode $j$, are marked as failures and the failures for the other failure modes are marked as right-censored observations. This way, we can compute both, the parametric and non-parametric estimates of the marginal distribution for failure mode $j$. 
+
+
+## 2.1 Parametric Analysis for Failure Mode 1 = Break
+
+First we consider the failure mode break. This means that we are going to consider the failures for failure mode break as failures and the failures for failure mode obstruction are marked as right-censored observations.  
+
+In order to perform the parametric analysis for failure mode break, we need to find a distribution that fits our data. For this, we use probability plots. Below we have the probability plots for four different distributions. 
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE, fig.width=10, fig.height=6}
+
+DishwasherBreak <- read.csv("DishwasherReliabilityBreak.csv")
+
+
+## Failure Mode = Break, Censoring = Obstruction
+
+## Weibull fits better
+
+DishwasherBreak.ld <- frame.to.ld(DishwasherBreak,
+                              response.column = 2, 
+                              censor.column = 3,
+                              time.units = "Cycles")
+
+
+par(mfrow = c(1,2))
+mleprobplot(DishwasherBreak.ld, distribution="Weibull")
+legend("top", legend = "Mode 1 = Break ~ Weibull" , lty = 1:1)
+
+mleprobplot(DishwasherBreak.ld, distribution="lognormal")
+legend("top", legend = "Mode 1 = Break ~ Lognormal" , lty = 1:1)
+
+par(mfrow = c(1,1))
+
+par(mfrow = c(1,2))
+mleprobplot(DishwasherBreak.ld, distribution="loglogistic")
+legend("top", legend = "Mode 1 = Break ~ Loglogistic" , lty = 1:1)
+
+mleprobplot(DishwasherBreak.ld, distribution="frechet")
+legend("top", legend = "Mode 1 = Break ~ Frechet" , lty = 1:1)
+par(mfrow = c(1,1))
+
+
+
+
+```
+
+From these plots we see that for this failure mode Weibull distribution is a better fit. Thus we are going to use this distribution for the parametric analysis. 
+
+
+In the next figure we have the pdf, CDF, survival and hazard function for the Weibull distribution with parameters, the ML estimates. 
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE, fig.width=8, fig.height=7}
+
+x<-98:2000
+
+PDF.weibull <- dweibull(x, shape = 1.977, scale = 891.9)
+
+
+q <- qweibull(x/2000,shape = 1.977, scale = 891.9)
+
+CDF.weibull <- pweibull(q, shape = 1.977, scale = 891.9)
+
+
+survival.weibull <- 1 - CDF.weibull
+
+
+# Create a survival object
+surv_object <- Surv(DishwasherBreak$Cycles, 
+                    event = DishwasherBreak$Censoring.Indicator == "Failed" )
+
+
+## Hazard function plot for the assumed distribution
+
+hazard.fn <- psm(surv_object ~ 1, data = DishwasherBreak)
+
+
+
+par(mfrow = c(2,2))
+
+plot(x, PDF.weibull, type = "l", ylim = c(0, 0.001), xlab="Cycles")
+plot(q, CDF.weibull, type = "l",  xlab="Cycles")
+plot(q, survival.weibull, type = "l",  xlab="Cycles")
+survplot(hazard.fn, what="hazard")
+
+par(mfrow = c(1,1))
+
+
+```
+
+Under the assumption that the Weibull distribution is correct, we give the ML estimates for the reliability, quantiles and the hazard rate, as well as $95 \%$ confidence intervals for each of them. The ML estimate for the Mean Time To Failure is $MTTF = 790.6$ cycles. We can see that $10\%$ of the dishwashers will fail due to arm spray break after about 87 cycles, and $90\%$ of them will fail after about 1360 cycles. After 1000 cycles the probability that the spray arm will break is $0.7145$, with a $95\%$ confidence interval $(0.5712, 0.8437)$. 
+
+The hazard rate is very small, which tells us that in general the spray arms take longer to break, after having completed many cycles. 
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+##ML Estimates tables
+
+DishwasherBreak.mlest <- mlest(DishwasherBreak.ld, 
+                             distribution = "Weibull")
+
+
+#print(DishwasherBreak.mlest)
+
+print(DishwasherBreak.mlest$ll.text)
+print(DishwasherBreak.mlest$mttf.text)
+
+print(DishwasherBreak.mlest$mle.table)
+
+print(DishwasherBreak.mlest$failure.probabilities)
+
+print(DishwasherBreak.mlest$quantiles)
+
+```
+
+
+\newpage
+
+## 2.2 Parametric Analysis for Failure Mode 2 = Obstruction
+
+Now we consider the failure mode obstruction. This means that we are going to consider the failures for failure mode obstruction as failures and the failures for failure mode break are marked as right-censored observations.  
+
+Again, for the parametric analysis we need to find a distribution that fits well our data. Below we have the probability plots for four different distributions.
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE, fig.width=10, fig.height=7}
+
+DishwasherObstruction <- read.csv("DishwasherReliabilityObstruction.csv")
+
+
+## Failure Mode = Break, Censoring = Obstruction
+
+##Lognormal fits better
+
+
+DishwasherObstruction.ld <- frame.to.ld(DishwasherObstruction,
+                                        response.column = 2, 
+                                        censor.column = 3,
+                                        time.units = "Cycles")
+
+
+par(mfrow= c(1,2))
+mleprobplot(DishwasherObstruction.ld, distribution="Weibull")
+legend("top", legend = "Mode 2 = Obstruction ~ Weibull" , lty = 1:1)
+
+mleprobplot(DishwasherObstruction.ld, distribution="lognormal")
+legend("top", legend = "Mode 2 = Obstruction ~ Lognormal" , lty = 1:1)
+par(mfrow= c(1,1))
+
+
+par(mfrow= c(1,2))
+mleprobplot(DishwasherObstruction.ld, distribution="loglogistic")
+legend("top", legend = "Mode 2 = Obstruction ~ Loglogistic" , lty = 1:1)
+
+mleprobplot(DishwasherObstruction.ld, distribution="frechet")
+legend("top", legend = "Mode 2 = Obstruction ~ Frechet" , lty = 1:1)
+par(mfrow= c(1,1))
+
+
+```
+
+From these four plots, Frechet distributions seems to be a better fit for the failure mode obstruction. Assuming that this distribution is correct, we are going to perform the parametric analysis based on it. 
+In the figure below we have the pdf, CDF, survival and hazard function for the Frechet distribution with parameters, the ML estimates. 
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE, fig.width=10, fig.height=7}
+
+x<-7:1200
+
+PDF.frechet <- dfrechet(x, scale = 1.95, shape = 4.928)
+
+
+q <- qfrechet(x/1200,scale = 1.95, shape = 4.928)
+
+CDF.frechet <- pfrechet(q, scale = 1.95, shape = 4.928)
+
+survival.frechet <- 1-CDF.frechet
+
+
+# Create a survival object
+surv_object1 <- Surv(DishwasherObstruction$Cycles, 
+              event = DishwasherObstruction$Censoring.Indicator == "Failed")
+
+## Hazard function plot for the assumed distribution
+
+hazard.fn1 <- psm(surv_object1 ~ 1, data = DishwasherObstruction)
+
+
+par(mfrow = c(2,2))
+
+plot(x, PDF.frechet, type = "l", ylim = c(0, 0.0015), xlab="Cycles")
+plot(q, CDF.frechet, type = "l",  xlab="Cycles")
+plot(q, survival.frechet, type = "l",  xlab="Cycles")
+survplot(hazard.fn1, what="hazard")
+
+par(mfrow = c(1,1))
+
+
+
+
+```
+
+
+
+Under the assumed Frechet distribution, we give the ML estimates for the reliability, quantiles and the hazard rate, as well as $95 \%$ confidence intervals for each of them. The ML estimate for the Mean Time To Failure under this distribution does not exist, since the shape parameter $\beta = \frac{1}{\sigma} = 0.513 < 1$.
+
+We can see that $10\%$ of the dishwashers will fail due to arm spray obstruction after about 7 cycles, and $90\%$ of them will fail after about 11120 cycles. After 1000 cycles the probability that the spray arm will break is $0.6961$, with a $95\%$ confidence interval $(0.5733, 0.7898)$. 
+
+The hazard rate estimates are in accordance with the graph above, as we can see that the values come decreasing, with the increase in the number of cycles.  
+
+
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+DishwasherObstruction.mlest <- mlest(DishwasherObstruction.ld, 
+                               distribution = "frechet")
+
+
+#print(DishwasherObstruction.mlest)
+
+print(DishwasherObstruction.mlest$ll.text)
+print(DishwasherObstruction.mlest$mttf.text)
+
+print(DishwasherObstruction.mlest$mle.table)
+
+print(DishwasherObstruction.mlest$failure.probabilities)
+
+print(DishwasherObstruction.mlest$quantiles)
+
+```
+
+We construct a multiple probability plot that shows the parametric and non-parametric estimates for each of the failure modes together in one plot. 
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+mleprobplot(DishwasherBreak.ld, distribution="Weibull", lwd.ci = NULL)
+
+mleprobplot(DishwasherObstruction.ld, distribution="frechet", 
+            param.loc = "topleft", lwd.ci = NULL, add = TRUE)
+
+
+legend("top", legend = c("Mode 2 = Obstruction ~ Frechet",
+                         "Mode 1 = Break ~ Weibull" ) , lty = 1:1)
+
+
+```
+
+The plot shows the ML estimates for each failure mode and the non-parametric estimate of the proportion failing. Both distributions seem to fit each failure mode well. 
+
+
+
+# 3. Non-Parametric Analysis
+
+
+## 3.1 Non-Parametric Analysis for Failure Mode 1 = Break
+
+For the non-parametric analysis, we are going to compute the Kaplan-Meier estimates for the failing and survival probabilities. 
+
+The table below gives these values. These values are close to what we got from the parametric analysis. 
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+DishwasherBreak1 <- read.csv("DishwasherReliabilityBreak2.csv")
+
+
+ti <- DishwasherBreak1$Cycles
+di <- DishwasherBreak1$Failed
+ri <- 0
+n <- sum(DishwasherBreak1$Failed)
+ni <- DishwasherBreak1$Risked
+pi.hat<- di/ni
+S.hat<- cumprod(1-pi.hat)
+F.hat <- 1 - S.hat
+
+DishwasherBreak.1 <- cbind(DishwasherBreak1, DishwasherBreak1$Cycles, S.hat, F.hat)
+
+# Filter rows where Failure is "Break" and select S.hat and F.hat
+result <- DishwasherBreak.1[DishwasherBreak1$Failure == "Break", c("Failure","Cycles","S.hat", "F.hat")]
+
+# View the resulting data frame
+print(result)
+
+
+```
+
+
+
+
+We construct a probability plot for the failures of failure mode break.
+
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+subset_break <- DishwasherBreak.1[DishwasherBreak1$Failure == "Break", ]
+
+lab.vec <- c(0.0001,0.0002,0.0003,0.0005,0.001,0.003,0.005,0.01,0.02,0.03,
+             0.05,0.1,0.2,0.3, 0.5, 0.8, 0.9, 0.99, 0.999)
+
+
+plot(subset_break$Cycles, log(-log(1 - subset_break$F.hat)),
+     ylab = "Probability", xlab = "Cycles",
+     main = "Weibull Probability Scale",
+     ylim = log(-log(1 - c(0.001, 0.999))), log = 'x', axes = FALSE,
+     xlim = c(98, 2000))
+
+# Add axes
+axis(1)
+axis(2, las = 2, at = log(-log(1 - lab.vec)), tcl = 0.1, labels = lab.vec)
+
+
+
+```
+
+
+
+Using the survival package in R, we create a survival object in order to create a Kaplan-Meier survival curve and get the Kaplan-Meier estimates for the survival probabilities. The summary and the Kaplan-Meier curve are found below. 
+
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+# Create a survival object
+surv_object <- Surv(DishwasherBreak1$Cycles, 
+                    event = DishwasherBreak1$Censoring.Indicator == "Failed")
+
+
+survfit_object <- survfit(surv_object ~ 1, data = DishwasherBreak1)
+
+summary_result<- summary(survfit_object, time = DishwasherBreak1$Cycles)
+
+
+
+# Create a data frame
+summary_df <- data.frame(time = summary_result$time, 
+                         survival = summary_result$surv,
+                         n.risk = summary_result$n.risk,
+                         n.event = summary_result$n.event,
+                         std.err = summary_result$std.err,
+                         "lower 95 CI" = summary_result$lower,
+                         "upper 95 CI" = summary_result$upper)
+
+
+summary_df_break <- subset(summary_df, n.event == 1)
+
+
+print(summary_df_break)
+
+
+```
+
+
+We can see that the Kaplan-Meier estimates for the survival probabilities found above match the results from the survival object. 
+
+The figure below gives us the Kaplan-Meier survival curve for failure mode break. 
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+# Plot the Kaplan-Meier survival curve
+
+# Create a survival object
+surv_object.1 <- Surv(subset_break$Cycles, 
+                    event = subset_break$Censoring.Indicator == "Failed")
+
+
+survfit_object.1 <- survfit(surv_object.1 ~ 1, data = subset_break)
+
+
+plot(survfit_object.1, col = 1, mark.time = TRUE, main = "Kaplan-Meier Survival Curve",
+     xlab = "Time to Event", ylab = "Survival Probability")
+
+
+
+```
+
+
+We see that as the number of cycles increases, the survival probability tends to zero, as expected. 
+
+
+
+
+## 3.2 Non-Parametric Analysis for Failure Mode 2 = Obstruction
+
+
+The non-parametric analysis for failure mode 2= obstruction. We repeat the same process as for failure mode 1 = break. First compute the Kaplan-Meier estimators, and construct a probability plot for obstruction failure times. Then we compare them with the values from the survival object for these failure times. 
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+
+DishwasherObstruction1 <- read.csv("DishwasherReliabilityObstruction2.csv")
+
+#plot the hazard cumulative function for failure mode = break
+
+ti <- DishwasherObstruction1$Cycles
+di <- DishwasherObstruction1$Failed
+n <- sum(DishwasherObstruction1$Failed)
+ni <- DishwasherObstruction1$Risked
+pi.hat<- di/ni
+S.hat1<- cumprod(1-pi.hat)
+F.hat1 <- 1 - S.hat1
+
+
+DishwasherObstruction.1 <- cbind(DishwasherObstruction1,DishwasherObstruction1$Cycles, S.hat1, F.hat1)
+
+# Filter rows where Failure is "Break" and select S.hat and F.hat
+result.o <- DishwasherObstruction.1[DishwasherObstruction1$Failure == "Obstruction", 
+c("Failure","Cycles","S.hat1", "F.hat1")]
+
+# View the resulting data frame
+print(result.o)
+
+
+```
+
+
+Probability plot for the failures of failure mode obstruction. 
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+subset_obst <- DishwasherObstruction.1[DishwasherObstruction1$Failure == "Obstruction", ]
+
+lab.vec <- c(0.0001,0.0002,0.0003,0.0005,0.001,0.003,0.005,0.01,0.02,0.03,
+             0.05,0.1,0.2,0.3, 0.5, 0.8, 0.9, 0.99, 0.999)
+
+
+plot(subset_obst$Cycles, log(-log(1 - subset_obst$F.hat1)),
+     ylab = "Probability", xlab = "Cycles",
+     main = "Weibull Probability Scale",
+     ylim = log(-log(1 - c(0.001, 0.999))), log = 'x', axes = FALSE,
+     xlim = c(7, 1500))
+
+# Add axes
+axis(1)
+axis(2, las = 2, at = log(-log(1 - lab.vec)), tcl = 0.1, labels = lab.vec)
+
+
+```
+
+
+The survival probabilities, standard error and $95\%$ confidence interval for them with failure mode obstruction. 
+
+
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+# Create a survival object
+surv_object1 <- Surv(DishwasherObstruction1$Cycles, 
+              event = DishwasherObstruction1$Censoring.Indicator == "Failed")
+
+
+survfit_object1 <- survfit(surv_object1 ~ 1, data = DishwasherObstruction1)
+
+summary_result1<- summary(survfit_object1, time = DishwasherObstruction1$Cycles)
+
+# Create a data frame
+summary_df1 <- data.frame(time = summary_result1$time, 
+                         survival = summary_result1$surv,
+                         n.risk = summary_result1$n.risk,
+                         n.event = summary_result1$n.event,
+                         std.err = summary_result1$std.err,
+                         "lower 95 CI" = summary_result1$lower,
+                         "upper 95 CI" = summary_result1$upper)
+
+
+summary_df_obst <- subset(summary_df1, n.event == 1)
+
+
+print(summary_df_obst)
+
+```
+
+
+The survival probabilites of the survival object agree with the Kaplan-Meier estimates that we found above. The Kaplan-Meier survival curve for this case is given below. 
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+# Create a survival object
+surv_object.2 <- Surv(subset_obst$Cycles, 
+                      event = subset_obst$Censoring.Indicator == "Failed")
+
+
+survfit_object.2 <- survfit(surv_object.2 ~ 1, data = subset_obst)
+
+
+
+# Plot the Kaplan-Meier survival curve
+
+plot(survfit_object.2, col = 1, mark.time = TRUE, main = "Kaplan-Meier Survival Curve",
+     xlab = "Time to Event", ylab = "Survival Probability")
+
+
+```
+
+
+# 4. Consider both Failure Modes 
+
+Now we are going to take into consideration both failure modes of the system. For this we are going to refer to Chapter 16 of Statistical Methods for Reliability Data [@meeker]. Let $T_{1}$ and $T_{2}$ be the failure times for failure mode 1 and failure mode 2 respectively. Then, the joint distribution of $T_{1}$ and $T_{2}$ is $F(t_{1}, t_{2}) = \Pr (T_{1} \le t_{1}, T_{2} \le t_{2})$ and it completely describes the multiple failure modes probability model. \\
+
+The marginal distribution for mode $j$ is $F_{j}(t) = \Pr(T_{j} \le t)$. We can interpret this as the cdf for mode $j$ if only mode $j$ is active, where $j = 1, 2$ in our case. Previously we made the strong assumption that the two failure modes are independent of each other. In that case the joint distribution is 
+
+\[
+F(t_{1}, t_{2}) = \prod_{j = 1}^J F_{j}(t_{j})
+\]
+
+
+The system failure time is the first failure time. This means that the other failure times for the other modes are unobserved. So, 
+
+\[
+T = \min{T_{1}, T_{2}}
+\]
+
+Becasue we assumed the failure modes to be independent, then the cdf for the random variable T is given by ,
+
+\[
+F_{T}(t) = \Pr(T \le t) = 1 - \Pr(T > t) = 1 - \Pr(T_{1} >t_{1} \cap T_{2} > t_{2} )
+\]
+
+\[
+F_{T}(t) = 1 - \prod_{j=1}^{2}[1 - F_{j}(t)]
+\]
+
+
+For failure mode 1 = break we assumed that the failures followed a Weibull distribution, and for failure mode 2 = obstruction, we assumed a Frechet distribution. 
+
+So, then we have, 
+
+the marginal cdf of first falure mode: $F_{1}(t) = 1 - \exp \Big[ - (\frac{t}{\eta_{1}})^{\beta_{1}}\Big]$   
+
+and the marginal cdf of second failure mode: $\exp \Big[ - (\frac{\eta_{2}}{t})^{\beta_{2}} \Big]$. 
+
+
+Substituting above we get that the system's cdf is 
+
+\[
+F_{T}(t) = 1 - \exp \Big[ - (\frac{t}{\eta_{1}})^{\beta_{1}}\Big] + \exp \Bigg[ - (\frac{t}{\eta_{1}})^{\beta_{1}} - (\frac{t}{\eta_{2}})^{-\beta_{2}} \Bigg]
+\]
+
+
+where, $\eta_{2} = \exp(\mu)$ and $\beta_{2} = \frac{1}{\sigma}$. 
+
+The quantiles of the system failure-time distribution can be obtained numerically by solving for  $t_{p}$ in $F_{T}(t_{p}) = p$. 
+
+Similarly, the MTTF is  
+
+
+\[
+E(T) = \int_{0}^{\infty} \Big[1 - F_{T}(t) \Big] dt = \int_{0}^{\infty}  \exp \Big[ - (\frac{t}{\eta_{1}})^{\beta_{1}}\Big] + \exp \Bigg[ - (\frac{t}{\eta_{1}})^{\beta_{1}} - (\frac{t}{\eta_{2}})^{\beta_{2}} \Bigg] dt
+\]
+
+
+An estimate of the failure-time cdf for the system with all failure modes active is obtained by substituting the ML estimates for the parameters for all of the failure modes into the system cdf. 
+
+Since we already obtained the ML estimates for all the failure modes, we can estimate the cdf of the system failure-time. So we will have the following table, showing the failure and the survival probability for each system failure-time. 
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+Dishwasher2 <- read.csv("DishwasherReliability2.csv")
+
+eta.w <- 891.9
+beta.w <- 1.977
+
+mu.f <- 4.928
+sigma.f <- 1.95
+
+eta.f <- exp(mu.f)
+beta.f <- 1/sigma.f
+
+
+F.hat.joint <- 1 - exp(-1*(Dishwasher2$Cycles/eta.w)^beta.w) + 
+  exp(-1*((Dishwasher2$Cycles/eta.w)^beta.w + (eta.f/Dishwasher2$Cycles)^beta.f))
+
+S.hat.joint <- 1- F.hat.joint
+
+Cycles <- Dishwasher2$Cycles
+
+cbind(Cycles, F.hat.joint, S.hat.joint)
+
+```
+
+We can also compute the Kaplan-Meier estimate for the system failure-times. These estimates are, 
+
+\newpage
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+Dishwasher2 <- read.csv("DishwasherReliability2.csv")
+# Kaplan - Meier Estimate 
+
+ti <- Dishwasher2$Cycles
+di <- Dishwasher2$Failed
+n <- sum(Dishwasher2$Failed)
+ni <- Dishwasher2$Risked
+pi.hat<- di/ni
+S.hat.KM<- cumprod(1-pi.hat)
+F.hat.KM <- 1 - S.hat.KM
+
+Cycles <- Dishwasher2$Cycles
+
+Dishwasher.2 <-cbind(Cycles,F.hat.KM, S.hat.KM)
+print(Dishwasher.2)
+
+```
+
+
+Lastly, we plot the Kaplan-Meier estimate of the cdf versus cycles in a Weibull Probability Plot Scale.
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+### Plotting the Kaplan - Meier estimate 
+
+lab.vec <- c(0.0001,0.0002,0.0003,0.0005,0.001,0.003,0.005,0.01,0.02,0.03,
+             0.05,0.1,0.2,0.3, 0.5, 0.8, 0.9, 0.99, 0.999)
+
+
+plot(Cycles, log(-log(1 - F.hat.KM)),
+     ylab = "Probability", xlab = "Cycles",
+     main = "Weibull Probability Scale",
+     ylim = log(-log(1 - c(0.001, 0.999))), log = 'x', axes = FALSE,
+     xlim = c(7, 2000))
+
+# Add axes
+axis(1)
+axis(2, las = 2, at = log(-log(1 - lab.vec)), tcl = 0.1, labels = lab.vec)
+
+
+```
+
+
+
+
+# 5. Comparing the two failure mode distributions 
+
+Previously we assumed that each of the two failure modes followed two different distributions, Weibull and Frechet, respectively. 
+
+
+Now, let's suppose that also the second failure mode, obstruction, follows a Weibull Distribution. We can perform a Likelihood ratio test, to check if under this new assumption, the two distributions would have the same shape parameter.  
+
+Again, we create a survival object and fit two separate Weibull distributions to the two marginal distributions. So, we have, 
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+Dishwasher <- read.csv("DishwasherReliability1.csv")
+
+
+surv_object3 <- Surv( time = Dishwasher$Cycles
+                         ,time2 = Dishwasher$Cycles
+                         ,type = "interval2")
+
+
+#Fitting Separate Distributions to each failure mode
+SepDist.fits <- lapply(c("Break", "Obstruction"),
+                       function(failure)
+                         survreg(Surv( time = Cycles
+                                       ,time2 = Cycles
+                                       ,type = "interval2") ~ 1,
+      data=subset(Dishwasher, Dishwasher$Failure == failure),
+                                 dist = "weibull"))
+
+print(SepDist.fits)
+
+
+log.l.break <- -184.1
+
+log.l.obstruction <- -243.9 
+
+log.l.sep <- log.l.break + log.l.obstruction
+
+print(log.l.sep)
+
+
+```
+
+For the marginal distribution of failure mode break, we have that the maximum log-likelihood is -184.1, and for the marginal distribution of failure mode obstruction the maximum log-likelihood is -243.9. The sum of the two equals -428. 
+
+
+We can also compute the log-likelihood of each of the separate distributions independently. The likelihood function for all exact failure times based on a Weibull distribution with pdf the following
+
+\[
+f(t;\eta, \beta) = \frac{\beta}{\eta} \Big( \frac{t}{\eta}\Big)^{\beta -1} \exp \Bigg[- \Bigg(\frac{t}{\eta} \Bigg)^{\beta}\Bigg]
+\]
+
+is going to be 
+
+\begin{align*}
+L(\eta, \beta;t) & = \prod_{i =1}^{n} \frac{\beta}{\eta} \Big( \frac{t_{i}}{\eta}\Big)^{\beta -1} \exp \Bigg[- \Bigg(\frac{t_{i}}{\eta} \Bigg)^{\beta}\Bigg] \\
+& = \Bigg(\frac{\beta}{\eta^{\beta}}\Bigg)^{n} \prod_{i=1}^{n} t_{i}^{\beta -1} \exp \Big(- \frac{1}{\eta^{\beta}} \sum_{i =1}^{n} t_{i}^{\beta}\Big)
+\end{align*}
+
+
+and the log-likelihood is given by 
+
+\[
+\mathcal{L}(\eta,\beta;t) = n\ln(\beta)-n\beta\ln(\eta) + (\beta -1)\sum_{i=1}^{n}\ln(t_{i}) - \frac{1}{\eta^{\beta}} \sum_{i=1}^{n}t_{i}^{\beta}
+\]
+
+Using \texttt{optim} function we get the following results
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+log_likelihood.break <- function(parameters, data) {
+  shape <- parameters[1]
+  scale <- parameters[2]
+  
+  # Ensure shape and scale are positive
+  if (shape <= 0 || scale <= 0) {
+    return(Inf)  # Return infinite log-likelihood for invalid parameters
+  }
+  
+  log_likelihood_values <- dweibull(data, shape = shape, scale = scale, log = TRUE)
+  return(-sum(log_likelihood_values)) 
+}
+
+
+DishwasherBreakonly<- read.csv("DishwasherBreakonly.csv")
+cycles.break <- DishwasherBreakonly$Cycles
+
+# Initial parameter values
+initial_params <- c(shape = 1, scale = 1)
+
+# Optimize the log-likelihood function
+result.break <- optim(par = initial_params, fn = log_likelihood.break, data = cycles.break)
+
+# Extract the optimized parameters
+optimized_params.break <- result.break$par
+
+# View optimization results
+print(result.break)
+print(optimized_params.break)
+
+```
+
+
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+log_likelihood.obstr <- function(parameters, data) {
+  shape <- parameters[1]
+  scale <- parameters[2]
+  
+  # Ensure shape and scale are positive
+  if (shape <= 0 || scale <= 0) {
+    return(Inf)  # Return infinite log-likelihood for invalid parameters
+  }
+  
+  log_likelihood_values <- dweibull(data, shape = shape, scale = scale, log = TRUE)
+  return(-sum(log_likelihood_values))  
+}
+
+# Example dataset
+set.seed(123)
+
+DishwasherObstructiononly<- read.csv("DishwasherObstructiononly.csv")
+cycles.obstr <- DishwasherObstructiononly$Cycles
+
+# Initial parameter values
+initial_params <- c(shape = 1, scale = 1)
+
+# Optimize the log-likelihood function
+result.obstr <- optim(par = initial_params, fn = log_likelihood.obstr, data = cycles.obstr)
+
+# Extract the optimized parameters
+optimized_params.obstr <- result.obstr$par
+
+# View optimization results
+print(result.obstr)
+print(optimized_params.obstr)
+
+```
+
+
+Computing the log-likelihood independently for each distribution gives the same results as the survival function.
+
+
+Next we fit distributions with the same shape parameter for both. 
+
+
+```{r,message=FALSE, warning= FALSE, echo=FALSE}
+
+#Assuming both failure modes have equal sigma
+
+Equal.fit <- survreg(surv_object3 ~ as.factor(Failure),
+                     data = Dishwasher,
+                     dist="weibull")
+
+print(Equal.fit)
+
+
+log.l.equal <- -433.1
+
+
+print(LRtest <- 2*(log.l.sep -log.l.equal))
+
+print(c.value <- qchisq(0.95, 1))
+
+
+```
+Equal sigma distributions gives a maximum likelihood equal to -433.1.
+
+Then the LRtest = 10.2, whereas $chisq(0.95, 1 = 1.841)$. Since LRtests > $chisq(0.95, 1 = 1.841)$, then we reject the hypothesis that both distributions have equal shape parameters. Therefore, the two failure modes have statistically significant differences between each-other. 
+
+
+
+# 6. Conclusions
+
+On conclusion we can say that the Mean Time To Failure of spray arms due to breaks was 790.6 cycles. 
+For obstructions the MTTF did not exist. 
+
+Referring to the Kaplan-Meier estimator of the survival probabilities for each of the three scenarios we found that: 
+
+About 95% of the spray arms survived breaks for at least 141.9 cycles, whereas 95% of spray arms survived obstruction for at least 10.2 cycles. 
+About 95% of spray arms survived both breaks and obstructions for at least 10.2 cycles. 
+From our results it seems that the obstruction failure mode needs more attention from the dishwasher engineers. They should focus on finding solutions on how to make the spray arm more resistant to obstructions. 
+
+
+
+\newpage
+
+
+# References
+
+<div id="refs"></div>
+
+
+# Apendix
+
+```{r ref.label=knitr::all_labels(), echo = T, eval = F}
+```
