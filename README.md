@@ -65,7 +65,6 @@ dishwasher-reliability-analysis/
 ├── Dishwasher_Reliability_Presentation.Rmd
 ├── Dishwasher_Reliability_Presentation.pdf
 ├── references.bib
-├── appendix.md
 │
 └── data/
     ├── DishwasherBreakonly.csv
