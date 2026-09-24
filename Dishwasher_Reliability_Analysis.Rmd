@@ -20,6 +20,31 @@ header-includes:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library(SMRD)
+# Compatibility patch for SMRD on newer versions of R
+CheckPrintDataName_fixed <- function() {
+  the.par <- par(xpd = TRUE)
+  on.exit(par(the.par))
+
+  if (SMRDOptions("SMRD.DateOnPlot")) {
+    text(x.loc(1), y.loc(-0.2), date(), adj = 1, cex = 0.8)
+  }
+
+  text(
+    x.loc(1),
+    y.loc(-0.23),
+    GetSMRDDefault("SMRD.NameOnPlot"),
+    adj = 1,
+    cex = 0.8
+  )
+}
+
+environment(CheckPrintDataName_fixed) <- asNamespace("SMRD")
+
+assignInNamespace(
+  "CheckPrintDataName",
+  CheckPrintDataName_fixed,
+  ns = "SMRD"
+)
 library(MASS)
 library(survival)
 library(survminer)
