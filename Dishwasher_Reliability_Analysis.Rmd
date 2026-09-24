@@ -77,7 +77,7 @@ In order to perform the parametric analysis for failure mode break, we need to f
 
 ```{r,message=FALSE, warning= FALSE, echo=FALSE, fig.width=10, fig.height=6}
 
-DishwasherBreak <- read.csv("DishwasherReliabilityBreak.csv")
+DishwasherBreak <- read.csv("data/DishwasherReliabilityBreak.csv")
 
 
 ## Failure Mode = Break, Censoring = Obstruction
@@ -193,7 +193,7 @@ Again, for the parametric analysis we need to find a distribution that fits well
 
 ```{r,message=FALSE, warning= FALSE, echo=FALSE, fig.width=10, fig.height=7}
 
-DishwasherObstruction <- read.csv("DishwasherReliabilityObstruction.csv")
+DishwasherObstruction <- read.csv("data/DishwasherReliabilityObstruction.csv")
 
 
 ## Failure Mode = Break, Censoring = Obstruction
@@ -329,7 +329,7 @@ For the non-parametric analysis, we are going to compute the Kaplan-Meier estima
 The table below gives these values. These values are close to what we got from the parametric analysis. 
 
 ```{r,message=FALSE, warning= FALSE, echo=FALSE}
-DishwasherBreak1 <- read.csv("DishwasherReliabilityBreak2.csv")
+DishwasherBreak1 <- read.csv("data/DishwasherReliabilityBreak2.csv")
 
 
 ti <- DishwasherBreak1$Cycles
@@ -456,7 +456,7 @@ The non-parametric analysis for failure mode 2= obstruction. We repeat the same 
 ```{r,message=FALSE, warning= FALSE, echo=FALSE}
 
 
-DishwasherObstruction1 <- read.csv("DishwasherReliabilityObstruction2.csv")
+DishwasherObstruction1 <- read.csv("data/DishwasherReliabilityObstruction2.csv")
 
 #plot the hazard cumulative function for failure mode = break
 
@@ -626,7 +626,7 @@ Since we already obtained the ML estimates for all the failure modes, we can est
 
 ```{r,message=FALSE, warning= FALSE, echo=FALSE}
 
-Dishwasher2 <- read.csv("DishwasherReliability2.csv")
+Dishwasher2 <- read.csv("data/DishwasherReliability2.csv")
 
 eta.w <- 891.9
 beta.w <- 1.977
@@ -655,7 +655,7 @@ We can also compute the Kaplan-Meier estimate for the system failure-times. Thes
 
 ```{r,message=FALSE, warning= FALSE, echo=FALSE}
 
-Dishwasher2 <- read.csv("DishwasherReliability2.csv")
+Dishwasher2 <- read.csv("data/DishwasherReliability2.csv")
 # Kaplan - Meier Estimate 
 
 ti <- Dishwasher2$Cycles
@@ -710,7 +710,7 @@ Now, let's suppose that also the second failure mode, obstruction, follows a Wei
 Again, we create a survival object and fit two separate Weibull distributions to the two marginal distributions. So, we have, 
 
 ```{r,message=FALSE, warning= FALSE, echo=FALSE}
-Dishwasher <- read.csv("DishwasherReliability1.csv")
+Dishwasher <- read.csv("data/DishwasherReliability1.csv")
 
 
 surv_object3 <- Surv( time = Dishwasher$Cycles
@@ -783,7 +783,7 @@ log_likelihood.break <- function(parameters, data) {
 }
 
 
-DishwasherBreakonly<- read.csv("DishwasherBreakonly.csv")
+DishwasherBreakonly<- read.csv("data/DishwasherBreakonly.csv")
 cycles.break <- DishwasherBreakonly$Cycles
 
 # Initial parameter values
@@ -822,7 +822,7 @@ log_likelihood.obstr <- function(parameters, data) {
 # Example dataset
 set.seed(123)
 
-DishwasherObstructiononly<- read.csv("DishwasherObstructiononly.csv")
+DishwasherObstructiononly<- read.csv("data/DishwasherObstructiononly.csv")
 cycles.obstr <- DishwasherObstructiononly$Cycles
 
 # Initial parameter values
